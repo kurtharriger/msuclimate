@@ -1,0 +1,58 @@
+---
+title: "Change in CO2 Levels resulting from Changes in Carbon Emissions"
+output: html_document
+---
+
+```{r, warning=FALSE}
+library(dplyr)
+library(ggplot2)
+
+# data prep 
+# determine average carbon dioxide levels for each year from provided keeling data
+
+keeling <- 
+  # Source - Class Material - https://msudenver.blackboard.com/bbcswebdav/pid-49175-dt-blog-rid-8347679_1/xid-8347679_1
+  read.csv('Keeling.csv') %>%
+  rename(CO2 = Carbon.Dioxide.Concentration..ppm.) %>% 
+  select(Year, CO2) %>%
+  mutate(Year = floor(Year)) %>%
+  group_by(Year) %>% 
+  summarize(CO2 = mean(CO2, na.rm=T)) 
+
+emissions <- 
+  # Source - http://cdiac.ornl.gov/trends/emis/tre_coun.html
+  read.csv('nation.1751_2011.csv', header=FALSE) %>%
+  select(Country = V1, Year = V2, Emissions = V3) %>%
+  mutate(Year = floor(Year)) %>%
+  group_by(Year) %>%
+  summarize(Emissions = sum(Emissions, na.rm=T))
+
+# Note: keeling only has data since 1958. 
+# so we only have 53 measurments
+data_by_year <- emissions %>% inner_join(keeling) 
+attach(data_by_year)
+
+# we can expect that a naive regression would reveal strong correlation
+# caused by a non-stationary spurious relationship
+m <- lm(CO2 ~ Emissions); summary(m)
+
+# Take first differences 
+change_by_year = data.frame(ChangeInEmissions=diff(log(Emissions)), ChangeInCO2 = diff(log(CO2)))
+attach(change_by_year)
+
+m <- lm(ChangeInCO2 ~ ChangeInEmissions); summary(m)
+
+qplot(y=ChangeInCO2, x=ChangeInEmissions, 
+      main="Change in CO2 per Change in Carbon Emissions",
+      ylab="Annual Change In CO2 ppm", xlab="Annual Change In Carbon Emissions") + 
+  theme_bw()
+
+# Best model produced using a 6 year lag
+m <- lm(ChangeInCO2 ~ lag(ChangeInEmissions,6)); summary(m)
+
+qplot(y=ChangeInCO2, x=lag(ChangeInEmissions,6), 
+      main="Change in CO2 per Change in Carbon Emissions",
+      ylab="Annual Change In CO2 ppm", xlab="Annual Change In Carbon Emissions 6 years prior") + 
+  theme_bw()
+
+```
